@@ -1,0 +1,14 @@
+# EdgeOne Pages 配置文件
+name = "bbs-go"
+compatibility_date = "2024-01-01"
+
+[build]
+command = "go build -o api ./cloud-functions"
+
+[build.environment]
+GO_VERSION = "1.21"
+
+[[services]]
+type = "api"
+name = "api"
+entrypoint = "cloud-functions/api.go"

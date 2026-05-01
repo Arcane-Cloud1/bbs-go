@@ -1,0 +1,128 @@
+common:
+  not_found: "数据不存在"
+topic:
+  node:
+    latest: 最新
+    recommend: 推荐
+    follow: 关注
+    has_children: "该节点下存在子分类，请先删除子分类"
+    child_type_must_match_parent: "子节点类型必须与父节点一致"
+  under_review: "内容审核中"
+  no_permission: "无权限"
+  type_not_supported: "当前类型帖子不支持修改"
+  node_type_mismatch: "所选节点不支持当前内容类型"
+  bounty_invalid: "悬赏积分不能为负数"
+  insufficient_score: "积分不足，无法设置悬赏"
+  bounty_deduct: "问答悬赏"
+  bounty_reward: "问答被采纳悬赏"
+  bounty_refund: "问答悬赏退回"
+  qa_bounty_disabled: "未开启问答悬赏功能"
+  bounty_required: "当前要求问答帖必须设置悬赏积分"
+  bounty_out_of_range: "悬赏积分超出允许范围"
+  bounty_out_of_range_range: "悬赏积分需在 %d ~ %d 之间"
+  bounty_out_of_range_min: "悬赏积分不能低于 %d"
+  bounty_out_of_range_max: "悬赏积分不能高于 %d"
+
+user:
+  anonymous: "匿名用户%d"
+  default_description: "这家伙很懒，什么都没留下"
+  blacklist: "黑名单用户"
+  not_found: "用户不存在"
+  no_permission: "无权限"
+  nickname_length_invalid: "昵称长度需在 %d 到 %d 个字符之间"
+  gender_error: "性别数据错误"
+  homepage_error: "个人主页地址错误"
+  avatar_empty: "头像不能为空"
+  upload_image_required: "请上传图片"
+  email_verified: "用户邮箱已验证"
+  email_required: "请输入邮箱"
+  email_invalid: "邮箱格式不正确"
+  email_occupied: "邮箱：%s 已被占用"
+  email_suffix_not_supported: "不支持该邮箱后缀: %s"
+  email_verify_title: "邮箱验证 - %s"
+  email_verify_content: "该邮件用于验证你在 %s 中设置邮箱的正确性，请在%d小时内完成验证。验证链接：%s"
+  email_verify_link: "点击这里验证邮箱>>"
+  email_verify_expired: "验证邮件已过期"
+  email_verify_illegal: "非法请求"
+  password_reset_title: "重置密码 - %s"
+  password_reset_content: "你正在 %s 进行密码重置，请在%d小时内完成操作。重置链接：%s"
+  password_reset_link: "点击这里重置密码>>"
+  password_reset_expired: "重置密码链接已过期"
+  password_reset_illegal: "非法的重置密码请求"
+  password_already_set: "你已设置了密码，如需修改请前往修改页面。"
+  password_not_set: "你没设置密码，请先设置密码"
+  old_password_invalid: "旧密码验证失败"
+
+errors:
+  not_login: "请先登录"
+  no_permission: "无权限"
+  captcha_error: "验证码错误"
+  forbidden: "已被禁言"
+  user_disabled: "账号已禁用"
+  email_not_verified: "请先验证邮箱"
+  in_observation: "账号尚在观察期，观察期剩余 %d 秒，请稍后再试"
+
+auth:
+  password_login_disabled: "账号密码登录/注册已禁用"
+  phone_required: "请输入手机号码"
+  sms_login_disabled: "短信登录已禁用"
+  login_data_error: "登录数据错误"
+  weixin_login_disabled: "微信登录已禁用"
+
+article:
+  not_found: "文章不存在"
+  under_review: "文章审核中"
+  no_permission: "无权限"
+
+install:
+  already_installed: "系统已安装，无需重复安装"
+
+upload:
+  image_too_large: "图片不能超过 %d M"
+
+attachment:
+  not_found: "附件不存在或已下架"
+  insufficient_score: "积分不足，无法下载"
+  no_permission: "无权限操作该附件"
+  already_bound: "附件已绑定其他帖子"
+  ext_not_allowed: "不支持该文件类型"
+  file_missing: "文件不存在"
+  download_deduct: "附件下载"
+  disabled: "附件上传功能未开启"
+  too_large: "单个附件不能超过 %d MB"
+  too_many: "每篇帖子最多上传 %d 个附件"
+
+message:
+  system_nickname: "系统通知"
+  topic_recommend_msg_title: "你的话题被设为推荐"
+  topic_delete_msg_title: "你的话题被删除"
+  topic_favorite_msg_title: "收藏了你的话题"
+  topic_like_msg_title: "点赞了你的话题"
+  user_level_up_msg_title: "等级提升"
+  user_level_up_msg_content: "恭喜你升级到 Lv.%d"
+  user_badge_grant_msg_title: "获得新勋章"
+  user_badge_grant_msg_content: "恭喜你获得勋章：%s"
+  user_badge_default_name: "新勋章"
+  qa_answer_accepted_msg_title: "你的回答被采纳为最佳答案"
+  qa_answer_accepted_msg_title_with_bounty: "你的回答被采纳为最佳答案，获得 %d 积分"
+
+email:
+  new_message: "新消息提醒"
+  topic_comment: "收到话题评论"
+  comment_reply: "收到他人回复"
+  topic_like: "收到点赞"
+  topic_favorite: "话题被收藏"
+  topic_recommend: "话题被设为推荐"
+  topic_delete: "话题被删除"
+  article_comment: "收到文章评论"
+  user_level_up: "等级提升"
+  user_badge_grant: "获得新勋章"
+  qa_answer_accepted: "你的回答被采纳为最佳答案"
+  qa_answer_accepted_with_bounty: "你的回答被采纳为最佳答案，获得 %d 积分"
+  view_details: "点击查看详情"
+
+task:
+  group:
+    newbie: "新手任务"
+    daily: "每日任务"
+    achievement: "成就任务"
