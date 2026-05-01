@@ -1,0 +1,9 @@
+{
+  "name": "bbs-go",
+  "build": {
+    "engine": "go"
+  },
+  "functions": {
+    "directory": "cloud-functions"
+  }
+}
