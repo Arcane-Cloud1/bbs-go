@@ -10,10 +10,10 @@ import (
 	"bbs-go/internal/repositories"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 
-	"github.com/kataras/iris/v12/x/errors"
 	"github.com/mlogclub/simple/common/dates"
 	"github.com/mlogclub/simple/common/jsons"
 	"github.com/mlogclub/simple/sqls"

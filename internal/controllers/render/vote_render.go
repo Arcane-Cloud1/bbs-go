@@ -6,11 +6,11 @@ import (
 	"bbs-go/internal/pkg/common"
 	"bbs-go/internal/services"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/dates"
 )
 
-func BuildVote(ctx iris.Context, vote *models.Vote) *resp.VoteResponse {
+func BuildVoteGin(ctx *gin.Context, vote *models.Vote) *resp.VoteResponse {
 	if vote == nil {
 		return nil
 	}

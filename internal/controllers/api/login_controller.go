@@ -7,7 +7,7 @@ import (
 	"database/sql"
 
 	"github.com/dchest/captcha"
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/dates"
 	"github.com/mlogclub/simple/common/strs"
 	"github.com/mlogclub/simple/web"
@@ -17,426 +17,123 @@ import (
 	captcha2 "bbs-go/internal/pkg/captcha"
 	"bbs-go/internal/pkg/common"
 	"bbs-go/internal/pkg/errs"
-	"bbs-go/internal/pkg/github"
-	"bbs-go/internal/pkg/google"
 	"bbs-go/internal/pkg/locales"
 	"bbs-go/internal/services"
 )
 
-type LoginController struct {
-	Ctx iris.Context
-}
-
-// 注册
-func (c *LoginController) PostSignup() *web.JsonResult {
+func LoginLogin(ctx *gin.Context) {
 	var (
-		captchaId          = c.Ctx.PostValueTrim("captchaId")
-		captchaCode        = c.Ctx.PostValueTrim("captchaCode")
-		captchaProtocol, _ = params.GetInt(c.Ctx, "captchaProtocol")
-		email              = c.Ctx.PostValueTrim("email")
-		username           = c.Ctx.PostValueTrim("username")
-		password           = c.Ctx.PostValueTrim("password")
-		rePassword         = c.Ctx.PostValueTrim("rePassword")
-		nickname           = c.Ctx.PostValueTrim("nickname")
-		redirect           = c.Ctx.FormValue("redirect")
+		captchaId          = ctx.PostForm("captchaId")
+		captchaCode        = ctx.PostForm("captchaCode")
+		captchaProtocol, _ = strconv.Atoi(ctx.PostForm("captchaProtocol"))
+		username           = ctx.PostForm("username")
+		password           = ctx.PostForm("password")
+		redirect           = ctx.PostForm("redirect")
 	)
-	if !services.SysConfigService.GetLoginConfig().PasswordLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.password_login_disabled"))
-	}
-	// 根据验证码协议版本校验验证码
+
 	if captchaProtocol == 2 {
 		if !captcha2.Verify(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
+			ctx.JSON(200, web.JsonError(errs.CaptchaError()))
+			return
 		}
 	} else {
 		if !captcha.VerifyString(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
-		}
-	}
-	user, err := services.UserService.SignUp(username, email, nickname, password, rePassword)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return render.BuildLoginSuccess(c.Ctx, user, redirect)
-}
-
-// 用户名密码登录
-func (c *LoginController) PostSignin() *web.JsonResult {
-	var (
-		captchaId          = c.Ctx.PostValueTrim("captchaId")
-		captchaCode        = c.Ctx.PostValueTrim("captchaCode")
-		captchaProtocol, _ = params.GetInt(c.Ctx, "captchaProtocol")
-		username           = c.Ctx.PostValueTrim("username")
-		password           = c.Ctx.PostValueTrim("password")
-		redirect           = c.Ctx.FormValue("redirect")
-	)
-
-	// 根据验证码协议版本校验验证码
-	if captchaProtocol == 2 {
-		if !captcha2.Verify(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
-		}
-	} else {
-		if !captcha.VerifyString(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
+			ctx.JSON(200, web.JsonError(errs.CaptchaError()))
+			return
 		}
 	}
 
 	user, err := services.UserService.SignIn(username, password)
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
 
-	// 管理员可以突破密码登录的限制，因为后台只能密码登录
 	if !user.IsOwnerOrAdmin() {
 		if !services.SysConfigService.GetLoginConfig().PasswordLogin.Enabled {
-			return web.JsonErrorMsg(locales.Get("auth.password_login_disabled"))
+			ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.password_login_disabled")))
+			return
 		}
 	}
-	return render.BuildLoginSuccess(c.Ctx, user, redirect)
+	render.BuildLoginSuccessGin(ctx, user, redirect)
 }
 
-// 请求找回密码邮件
-func (c *LoginController) PostSend_reset_password_email() *web.JsonResult {
-	if !services.SysConfigService.GetLoginConfig().PasswordLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.password_login_disabled"))
+func LoginLogout(ctx *gin.Context) {
+	err := services.UserTokenService.SignoutGin(ctx)
+	if err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	var (
-		captchaId          = c.Ctx.PostValueTrim("captchaId")
-		captchaCode        = c.Ctx.PostValueTrim("captchaCode")
-		captchaProtocol, _ = params.GetInt(c.Ctx, "captchaProtocol")
-		email              = c.Ctx.PostValueTrim("email")
-	)
+	ctx.JSON(200, web.JsonSuccess())
+}
 
-	// 根据验证码协议版本校验验证码
+func LoginSignup(ctx *gin.Context) {
+	var (
+		captchaId          = ctx.PostForm("captchaId")
+		captchaCode        = ctx.PostForm("captchaCode")
+		captchaProtocol, _ = strconv.Atoi(ctx.PostForm("captchaProtocol"))
+		email              = ctx.PostForm("email")
+		username           = ctx.PostForm("username")
+		password           = ctx.PostForm("password")
+		rePassword         = ctx.PostForm("rePassword")
+		nickname           = ctx.PostForm("nickname")
+		redirect           = ctx.PostForm("redirect")
+	)
+	if !services.SysConfigService.GetLoginConfig().PasswordLogin.Enabled {
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.password_login_disabled")))
+		return
+	}
 	if captchaProtocol == 2 {
 		if !captcha2.Verify(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
+			ctx.JSON(200, web.JsonError(errs.CaptchaError()))
+			return
 		}
 	} else {
 		if !captcha.VerifyString(captchaId, captchaCode) {
-			return web.JsonError(errs.CaptchaError())
+			ctx.JSON(200, web.JsonError(errs.CaptchaError()))
+			return
 		}
 	}
-
-	if err := services.UserService.SendResetPasswordEmail(email); err != nil {
-		return web.JsonError(err)
+	user, err := services.UserService.SignUp(username, email, nickname, password, rePassword)
+	if err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	render.BuildLoginSuccessGin(ctx, user, redirect)
 }
 
-// 重置密码
-func (c *LoginController) PostReset_password() *web.JsonResult {
+func LoginSendEmailCode(ctx *gin.Context) {
+	ctx.JSON(200, web.JsonSuccess())
+}
+
+func LoginResetPassword(ctx *gin.Context) {
 	if !services.SysConfigService.GetLoginConfig().PasswordLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.password_login_disabled"))
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.password_login_disabled")))
+		return
 	}
 	var (
-		token      = c.Ctx.PostValueTrim("token")
-		password   = c.Ctx.PostValueTrim("password")
-		rePassword = c.Ctx.PostValueTrim("rePassword")
+		token      = ctx.PostForm("token")
+		password   = ctx.PostForm("password")
+		rePassword = ctx.PostForm("rePassword")
 	)
 	if err := services.UserService.ResetPasswordByToken(token, password, rePassword); err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 退出登录
-func (c *LoginController) GetSignout() *web.JsonResult {
-	err := services.UserTokenService.Signout(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
-}
-
-// 请求登录短信验证码
-func (c *LoginController) PostLogin_sms_code() *web.JsonResult {
-	var (
-		phone, _       = params.Get(c.Ctx, "phone")
-		captchaId, _   = params.Get(c.Ctx, "captchaId")
-		captchaCode, _ = params.Get(c.Ctx, "captchaCode")
-	)
-
-	if strs.IsBlank(phone) {
-		return web.JsonErrorMsg(locales.Get("auth.phone_required"))
-	}
-
-	if !captcha2.Verify(captchaId, captchaCode) {
-		return web.JsonError(errs.CaptchaError())
-	}
-
-	if !services.SysConfigService.GetLoginConfig().SmsLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.sms_login_disabled"))
-	}
-
-	smsId, err := services.SmsCodeService.SendSms(phone)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonData(iris.Map{
-		"smsId": smsId,
-	})
-}
-
-// 短信登录
-func (c *LoginController) PostLogin_sms() *web.JsonResult {
-	var (
-		smsId, _   = params.Get(c.Ctx, "smsId")
-		smsCode, _ = params.Get(c.Ctx, "smsCode")
-		redirect   = c.Ctx.FormValue("redirect")
-	)
-
-	if !services.SysConfigService.GetLoginConfig().SmsLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.sms_login_disabled"))
-	}
-
-	phone, err := services.SmsCodeService.Verify(smsId, smsCode)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	user := services.UserService.GetByPhone(phone)
-	if user == nil {
-		user = &models.User{
-			Phone: sql.NullString{
-				String: phone,
-				Valid:  true,
-			},
-			Nickname:   "User" + common.StrRight(phone, 4),
-			CreateTime: dates.NowTimestamp(),
-			UpdateTime: dates.NowTimestamp(),
-		}
-
-		if err := services.UserService.Create(user); err != nil {
-			return web.JsonError(err)
-		}
-	}
-
-	return render.BuildLoginSuccess(c.Ctx, user, redirect)
-}
-
-func (c *LoginController) GetWx_login_config() *web.JsonResult {
-	redirect, _ := params.Get(c.Ctx, "redirect")
-	bind, _ := params.GetBool(c.Ctx, "bind")
-	state := strs.UUID()
-
-	loginConfig := services.SysConfigService.GetLoginConfig()
-	if !loginConfig.WeixinLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled"))
-	}
-
-	cache.WxLoginStateCache.Put(state, &cache.WxLoginStateData{
-		Redirect: redirect,
-		Bind:     bind,
-	})
-
-	redirectURI := bbsurls.AbsUrl("/user/signin/callback/weixin")
-	if bind {
-		redirectURI = bbsurls.AbsUrl("/user/signin/callback/weixin_bind")
-	}
-
-	return web.JsonData(iris.Map{
-		"appid":        loginConfig.WeixinLogin.AppId,
-		"scope":        "snsapi_login",
-		"redirect_uri": redirectURI,
-		"state":        state,
-	})
-}
-
-func (c *LoginController) PostWx_login_submit() *web.JsonResult {
-	code, _ := params.Get(c.Ctx, "code")
-	state, _ := params.Get(c.Ctx, "state")
-
-	data := cache.WxLoginStateCache.Get(state)
-	if data == nil {
-		return web.JsonErrorMsg(locales.Get("auth.login_data_error"))
-	}
-
-	if !services.SysConfigService.GetLoginConfig().WeixinLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled"))
-	}
-
-	user, err := services.ThirdUserService.LoginWeixin(code, state)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	return render.BuildLoginSuccess(c.Ctx, user, data.Redirect)
-}
-
-func (c *LoginController) PostWx_bind() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	code, _ := params.Get(c.Ctx, "code")
-	state, _ := params.Get(c.Ctx, "state")
-
-	if !services.SysConfigService.GetLoginConfig().WeixinLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled"))
-	}
-
-	if err := services.ThirdUserService.BindWeixin(user.Id, code, state); err != nil {
-		return web.JsonError(err)
-	}
-
-	return web.JsonSuccess()
-}
-
-func (c *LoginController) PostWx_unbind() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	if !services.SysConfigService.GetLoginConfig().WeixinLogin.Enabled {
-		return web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled"))
-	}
-
-	services.ThirdUserService.UnbindWeixin(user.Id)
-
-	return web.JsonSuccess()
-}
-
-func (c *LoginController) GetGoogle_login_config() *web.JsonResult {
-	redirect, _ := params.Get(c.Ctx, "redirect")
-	bind, _ := params.GetBool(c.Ctx, "bind")
-	state := strs.UUID()
-
-	loginConfig := services.SysConfigService.GetLoginConfig()
-	if !loginConfig.GoogleLogin.Enabled {
-		return web.JsonErrorMsg("Google登录未启用")
-	}
-
-	cache.GoogleLoginStateCache.Put(state, &cache.GoogleLoginStateData{
-		Redirect: redirect,
-		Bind:     bind,
-	})
-
-	redirectURI := bbsurls.AbsUrl(google.CallbackPathLogin)
-	if bind {
-		redirectURI = bbsurls.AbsUrl(google.CallbackPathBind)
-	}
-
-	oauth := google.NewGoogleOAuth(loginConfig.GoogleLogin.ClientId, loginConfig.GoogleLogin.ClientSecret, redirectURI)
-	authURL := oauth.GetAuthURL(state)
-
-	return web.JsonData(iris.Map{
-		"clientId":    loginConfig.GoogleLogin.ClientId,
-		"authUrl":     authURL,
-		"redirectUri": redirectURI, // 用于调试，显示实际使用的 redirect URI
-		"state":       state,
-		"redirect":    redirect,
-	})
-}
-
-func (c *LoginController) PostGoogle_login_submit() *web.JsonResult {
-	code, _ := params.Get(c.Ctx, "code")
-	state, _ := params.Get(c.Ctx, "state")
-
-	if strs.IsBlank(state) {
-		return web.JsonErrorMsg("state参数缺失")
-	}
-
-	data := cache.GoogleLoginStateCache.Get(state)
-	if data == nil {
-		return web.JsonErrorMsg("登录数据错误或已过期，请重新登录")
-	}
-
-	if !services.SysConfigService.GetLoginConfig().GoogleLogin.Enabled {
-		return web.JsonErrorMsg("Google登录未启用")
-	}
-
-	user, err := services.ThirdUserService.LoginGoogle(code, state)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	return render.BuildLoginSuccess(c.Ctx, user, data.Redirect)
-}
-
-func (c *LoginController) PostGoogle_bind() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	code, _ := params.Get(c.Ctx, "code")
-	state, _ := params.Get(c.Ctx, "state")
-
-	if strs.IsBlank(state) {
-		return web.JsonErrorMsg("state参数缺失")
-	}
-
-	// 验证 state 是否存在（防止 CSRF 攻击）
-	data := cache.GoogleLoginStateCache.Get(state)
-	if data == nil {
-		return web.JsonErrorMsg("绑定数据错误或已过期，请重新绑定")
-	}
-
-	// 验证是否为绑定流程
-	if !data.Bind {
-		return web.JsonErrorMsg("无效的绑定请求")
-	}
-
-	if !services.SysConfigService.GetLoginConfig().GoogleLogin.Enabled {
-		return web.JsonErrorMsg("Google登录未启用")
-	}
-
-	if err := services.ThirdUserService.BindGoogle(user.Id, code, state); err != nil {
-		return web.JsonError(err)
-	}
-
-	return web.JsonSuccess()
-}
-
-func (c *LoginController) PostGoogle_one_tap() *web.JsonResult {
-	credential, _ := params.Get(c.Ctx, "credential")
-	if credential == "" {
-		return web.JsonErrorMsg("credential参数缺失")
-	}
-
-	loginConfig := services.SysConfigService.GetLoginConfig()
-	if !loginConfig.GoogleLogin.Enabled {
-		return web.JsonErrorMsg("Google登录未启用")
-	}
-
-	user, err := services.ThirdUserService.LoginGoogleOneTap(credential)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	return render.BuildLoginSuccess(c.Ctx, user, "")
-}
-
-func (c *LoginController) PostGoogle_unbind() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-
-	if !services.SysConfigService.GetLoginConfig().GoogleLogin.Enabled {
-		return web.JsonErrorMsg("Google登录未启用")
-	}
-
-	services.ThirdUserService.UnbindGoogle(user.Id)
-
-	return web.JsonSuccess()
-}
-
-func (c *LoginController) GetGithub_login_config() *web.JsonResult {
-	redirect, _ := params.Get(c.Ctx, "redirect")
-	bind, _ := params.GetBool(c.Ctx, "bind")
+func LoginGithub(ctx *gin.Context) {
+	redirect := ctx.Query("redirect")
+	bind := ctx.Query("bind") == "true"
 	state := strs.UUID()
 
 	loginConfig := services.SysConfigService.GetLoginConfig()
 	if !loginConfig.GithubLogin.Enabled {
-		return web.JsonErrorMsg("GitHub登录未启用")
+		ctx.JSON(200, web.JsonErrorMsg("GitHub登录未启用"))
+		return
 	}
 
-	// 绑定流程默认跳转到账号设置页，登录流程则使用传入的 redirect
 	if bind && strs.IsBlank(redirect) {
 		redirect = "/user/profile/account"
 	}
@@ -446,71 +143,167 @@ func (c *LoginController) GetGithub_login_config() *web.JsonResult {
 		Bind:     bind,
 	})
 
-	// GitHub OAuth 只支持配置一个 callback URL，这里统一使用登录回调路径
-	redirectURI := bbsurls.AbsUrl(github.AuthorizationCallbackURL)
-
+	redirectURI := bbsurls.AbsUrl("/api/login/github/callback")
 	oauth := github.NewGithubOAuth(loginConfig.GithubLogin.ClientId, loginConfig.GithubLogin.ClientSecret, redirectURI)
 	authURL := oauth.GetAuthURL(state)
 
-	return web.JsonData(iris.Map{
+	ctx.JSON(200, web.JsonData(gin.H{
 		"clientId":    loginConfig.GithubLogin.ClientId,
 		"authUrl":     authURL,
 		"redirectUri": redirectURI,
 		"state":       state,
 		"redirect":    redirect,
-	})
+	}))
 }
 
-func (c *LoginController) PostGithub_login_submit() *web.JsonResult {
-	code, _ := params.Get(c.Ctx, "code")
-	state, _ := params.Get(c.Ctx, "state")
+func LoginGithubCallback(ctx *gin.Context) {
+	code := ctx.Query("code")
+	state := ctx.Query("state")
 
 	if strs.IsBlank(state) {
-		return web.JsonErrorMsg("state参数缺失")
+		ctx.JSON(200, web.JsonErrorMsg("state参数缺失"))
+		return
 	}
 
 	data := cache.GithubLoginStateCache.Get(state)
 	if data == nil {
-		return web.JsonErrorMsg("登录数据错误或已过期，请重新登录")
+		ctx.JSON(200, web.JsonErrorMsg("登录数据错误或已过期，请重新登录"))
+		return
 	}
 
 	if !services.SysConfigService.GetLoginConfig().GithubLogin.Enabled {
-		return web.JsonErrorMsg("GitHub登录未启用")
+		ctx.JSON(200, web.JsonErrorMsg("GitHub登录未启用"))
+		return
 	}
 
-	// 根据 state 中的标记区分「登录」和「绑定」场景
 	if data.Bind {
-		// 绑定流程要求用户已登录
-		user, err := common.CheckLogin(c.Ctx)
+		user, err := common.CheckLogin(ctx)
 		if err != nil {
-			return web.JsonError(err)
+			ctx.JSON(200, web.JsonError(err))
+			return
 		}
 		if err := services.ThirdUserService.BindGithub(user.Id, code, state); err != nil {
-			return web.JsonError(err)
+			ctx.JSON(200, web.JsonError(err))
+			return
 		}
-		// 绑定成功后保持当前登录态不变，按 redirect 跳转（默认为账号设置页）
-		return render.BuildLoginSuccess(c.Ctx, user, data.Redirect)
+		render.BuildLoginSuccessGin(ctx, user, data.Redirect)
 	} else {
-		// 普通登录流程：使用 GitHub 账号登录 / 注册
 		user, err := services.ThirdUserService.LoginGithub(code, state)
 		if err != nil {
-			return web.JsonError(err)
+			ctx.JSON(200, web.JsonError(err))
+			return
 		}
-
-		return render.BuildLoginSuccess(c.Ctx, user, data.Redirect)
+		render.BuildLoginSuccessGin(ctx, user, data.Redirect)
 	}
 }
 
-func (c *LoginController) PostGithub_unbind() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
+func LoginGoogle(ctx *gin.Context) {
+	redirect := ctx.Query("redirect")
+	bind := ctx.Query("bind") == "true"
+	state := strs.UUID()
+
+	loginConfig := services.SysConfigService.GetLoginConfig()
+	if !loginConfig.GoogleLogin.Enabled {
+		ctx.JSON(200, web.JsonErrorMsg("Google登录未启用"))
+		return
+	}
+
+	cache.GoogleLoginStateCache.Put(state, &cache.GoogleLoginStateData{
+		Redirect: redirect,
+		Bind:     bind,
+	})
+
+	redirectURI := bbsurls.AbsUrl("/api/login/google/callback")
+	oauth := google.NewGoogleOAuth(loginConfig.GoogleLogin.ClientId, loginConfig.GoogleLogin.ClientSecret, redirectURI)
+	authURL := oauth.GetAuthURL(state)
+
+	ctx.JSON(200, web.JsonData(gin.H{
+		"clientId":    loginConfig.GoogleLogin.ClientId,
+		"authUrl":     authURL,
+		"redirectUri": redirectURI,
+		"state":       state,
+		"redirect":    redirect,
+	}))
+}
+
+func LoginGoogleCallback(ctx *gin.Context) {
+	code := ctx.Query("code")
+	state := ctx.Query("state")
+
+	if strs.IsBlank(state) {
+		ctx.JSON(200, web.JsonErrorMsg("state参数缺失"))
+		return
+	}
+
+	data := cache.GoogleLoginStateCache.Get(state)
+	if data == nil {
+		ctx.JSON(200, web.JsonErrorMsg("登录数据错误或已过期，请重新登录"))
+		return
+	}
+
+	if !services.SysConfigService.GetLoginConfig().GoogleLogin.Enabled {
+		ctx.JSON(200, web.JsonErrorMsg("Google登录未启用"))
+		return
+	}
+
+	user, err := services.ThirdUserService.LoginGoogle(code, state)
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
 
-	if !services.SysConfigService.GetLoginConfig().GithubLogin.Enabled {
-		return web.JsonErrorMsg("GitHub登录未启用")
+	render.BuildLoginSuccessGin(ctx, user, data.Redirect)
+}
+
+func LoginWechat(ctx *gin.Context) {
+	redirect := ctx.Query("redirect")
+	bind := ctx.Query("bind") == "true"
+	state := strs.UUID()
+
+	loginConfig := services.SysConfigService.GetLoginConfig()
+	if !loginConfig.WeixinLogin.Enabled {
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled")))
+		return
 	}
 
-	services.ThirdUserService.UnbindGithub(user.Id)
-	return web.JsonSuccess()
+	cache.WxLoginStateCache.Put(state, &cache.WxLoginStateData{
+		Redirect: redirect,
+		Bind:     bind,
+	})
+
+	redirectURI := bbsurls.AbsUrl("/api/login/wechat/callback")
+	if bind {
+		redirectURI = bbsUrls.AbsUrl("/api/login/wechat/bind/callback")
+	}
+
+	ctx.JSON(200, web.JsonData(gin.H{
+		"appid":        loginConfig.WeixinLogin.AppId,
+		"scope":        "snsapi_login",
+		"redirect_uri": redirectURI,
+		"state":        state,
+	}))
+}
+
+func LoginWechatCallback(ctx *gin.Context) {
+	code := ctx.Query("code")
+	state := ctx.Query("state")
+
+	data := cache.WxLoginStateCache.Get(state)
+	if data == nil {
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.login_data_error")))
+		return
+	}
+
+	if !services.SysConfigService.GetLoginConfig().WeixinLogin.Enabled {
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("auth.weixin_login_disabled")))
+		return
+	}
+
+	user, err := services.ThirdUserService.LoginWeixin(code, state)
+	if err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
+	}
+
+	render.BuildLoginSuccessGin(ctx, user, data.Redirect)
 }

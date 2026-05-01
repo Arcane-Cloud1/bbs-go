@@ -75,13 +75,6 @@ func setupAPIRoutes(r *gin.Engine) {
 		topic.GET("/hide_content", api.TopicHideContent)
 	}
 
-	article := apiGroup.Group("/article")
-	{
-		article.GET("/tags", api.ArticleTags)
-		article.GET("/recent", api.ArticleRecent)
-		article.GET("/:id", api.ArticleDetail)
-	}
-
 	login := apiGroup.Group("/login")
 	{
 		login.POST("", api.LoginLogin)
@@ -121,105 +114,16 @@ func setupAPIRoutes(r *gin.Engine) {
 		user.GET("/checkin_logs", api.UserCheckinLogs)
 	}
 
-	tag := apiGroup.Group("/tag")
-	{
-		tag.GET("/tags", api.TagTags)
-		tag.POST("/create", api.TagCreate)
-		tag.GET("/:id", api.TagDetail)
-		tag.POST("/update/:id", api.TagUpdate)
-		tag.POST("/delete/:id", api.TagDelete)
-	}
-
-	comment := apiGroup.Group("/comment")
-	{
-		comment.GET("/comments", api.CommentComments)
-		comment.POST("/create", api.CommentCreate)
-		comment.GET("/:id", api.CommentDetail)
-		comment.POST("/delete/:id", api.CommentDelete)
-	}
-
-	favorite := apiGroup.Group("/favorite")
-	{
-		favorite.GET("/favorites", api.FavoriteFavorites)
-		favorite.POST("/create", api.FavoriteCreate)
-		favorite.POST("/delete/:id", api.FavoriteDelete)
-	}
-
-	like := apiGroup.Group("/like")
-	{
-		like.POST("/:entityType/:entityId", api.LikeLike)
-		like.DELETE("/:entityType/:entityId", api.LikeUnlike)
-		like.GET("/:entityType/:entityId/users", api.LikeUsers)
-	}
-
-	checkin := apiGroup.Group("/checkin")
-	{
-		checkin.POST("", api.CheckinCheckin)
-		checkin.GET("/ranking", api.CheckinRanking)
-	}
-
 	config := apiGroup.Group("/config")
 	{
 		config.GET("/configs", api.ConfigConfigs)
 		config.GET("/sys", api.ConfigSys)
 	}
 
-	upload := apiGroup.Group("/upload")
-	{
-		upload.POST("", api.UploadUpload)
-	}
-
-	attachment := apiGroup.Group("/attachment")
-	{
-		attachment.GET("/:id", api.AttachmentDetail)
-	}
-
-	link := apiGroup.Group("/link")
-	{
-		link.GET("/links", api.LinkLinks)
-	}
-
 	captcha := apiGroup.Group("/captcha")
 	{
 		captcha.GET("", api.CaptchaGet)
 		captcha.POST("/verify", api.CaptchaVerify)
-	}
-
-	search := apiGroup.Group("/search")
-	{
-		search.GET("", api.SearchSearch)
-	}
-
-	fans := apiGroup.Group("/fans")
-	{
-		fans.GET("/recent", api.FansRecent)
-		fans.GET("/follow_recent", api.FansFollowRecent)
-	}
-
-	userReport := apiGroup.Group("/user-report")
-	{
-		userReport.POST("/create", api.UserReportCreate)
-	}
-
-	task := apiGroup.Group("/task")
-	{
-		task.GET("/tasks", api.TaskTasks)
-		task.GET("/user_tasks", api.TaskUserTasks)
-	}
-
-	badge := apiGroup.Group("/badge")
-	{
-		badge.GET("/badges", api.BadgeBadges)
-		badge.GET("/user_badges", api.BadgeUserBadges)
-	}
-
-	vote := apiGroup.Group("/vote")
-	{
-		vote.GET("/:id", api.VoteDetail)
-		vote.GET("/:id/options", api.VoteOptions)
-		vote.POST("/:id/vote", api.VoteVote)
-		vote.GET("/:id/voted", api.VoteVoted)
-		vote.GET("/:id/users", api.VoteUsers)
 	}
 }
 

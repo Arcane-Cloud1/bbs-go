@@ -6,11 +6,10 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/jsons"
 	"github.com/mlogclub/simple/common/strs"
 	"github.com/mlogclub/simple/web"
-	"github.com/mlogclub/simple/web/params"
 	"github.com/tidwall/gjson"
 )
 
@@ -24,8 +23,8 @@ type CreateTopicForm struct {
 	Tags          []string              `json:"tags"`
 	ImageList     []ImageDTO            `json:"imageList"`
 	Vote          *CreateVoteForm       `json:"vote"`
-	BountyScore   int                   `json:"bountyScore"`   // 悬赏积分（仅问答帖有效，0 表示无悬赏）
-	AttachmentIds []string              `json:"attachmentIds"` // 附件 ID 列表（UUID），发帖时绑定到帖子
+	BountyScore   int                   `json:"bountyScore"`
+	AttachmentIds []string              `json:"attachmentIds"`
 	UserAgent     string                `json:"userAgent"`
 	Ip            string                `json:"ip"`
 
@@ -57,7 +56,7 @@ type EditTopicForm struct {
 	Content       string   `json:"content"`
 	HideContent   string   `json:"hideContent"`
 	Tags          []string `json:"tags"`
-	AttachmentIds []string `json:"attachmentIds"` // 附件 ID 列表（UUID），全量替换
+	AttachmentIds []string `json:"attachmentIds"`
 }
 
 type CreateArticleForm struct {
@@ -70,7 +69,6 @@ type CreateArticleForm struct {
 	SourceUrl   string
 }
 
-// CreateCommentForm 发表评论
 type CreateCommentForm struct {
 	EntityType string     `form:"entityType"`
 	EntityId   int64      `form:"entityId"`
@@ -85,27 +83,28 @@ type ImageDTO struct {
 	Url string `json:"url"`
 }
 
-func GetCreateTopicForm(ctx iris.Context) CreateTopicForm {
-	var form *CreateTopicForm
-	if ctx.GetHeader("Content-Type") == "application/json" {
-		if err := ctx.ReadJSON(&form); err != nil {
+func GetCreateTopicForm(ctx *gin.Context) CreateTopicForm {
+	var form CreateTopicForm
+	contentType := ctx.GetHeader("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		if err := ctx.ShouldBindJSON(&form); err != nil {
 			slog.Error(err.Error(), slog.Any("err", err))
 		}
 	} else {
-		form = &CreateTopicForm{
-			Type:            constants.TopicType(params.FormValueIntDefault(ctx, "type", int(constants.TopicTypeTopic))),
-			NodeId:          params.FormValueInt64Default(ctx, "nodeId", 0),
-			Title:           strings.TrimSpace(params.FormValue(ctx, "title")),
-			Content:         strings.TrimSpace(params.FormValue(ctx, "content")),
-			ContentType:     constants.ContentType(params.FormValue(ctx, "contentType")),
-			HideContent:     strings.TrimSpace(params.FormValue(ctx, "hideContent")),
-			Tags:            params.FormValueStringArray(ctx, "tags"),
+		form = CreateTopicForm{
+			Type:            constants.TopicType(getFormIntDefault(ctx, "type", int(constants.TopicTypeTopic))),
+			NodeId:          getFormInt64Default(ctx, "nodeId", 0),
+			Title:           strings.TrimSpace(ctx.PostForm("title")),
+			Content:         strings.TrimSpace(ctx.PostForm("content")),
+			ContentType:     constants.ContentType(ctx.PostForm("contentType")),
+			HideContent:     strings.TrimSpace(ctx.PostForm("hideContent")),
+			Tags:            ctx.PostFormArray("tags"),
 			ImageList:       GetImageList(ctx, "imageList"),
-			BountyScore:     params.FormValueIntDefault(ctx, "bountyScore", 0),
-			AttachmentIds:   params.FormValueStringArray(ctx, "attachmentIds"),
-			CaptchaId:       params.FormValue(ctx, "captchaId"),
-			CaptchaCode:     params.FormValue(ctx, "captchaCode"),
-			CaptchaProtocol: params.FormValueIntDefault(ctx, "captchaProtocol", 0),
+			BountyScore:     getFormIntDefault(ctx, "bountyScore", 0),
+			AttachmentIds:   ctx.PostFormArray("attachmentIds"),
+			CaptchaId:       ctx.PostForm("captchaId"),
+			CaptchaCode:     ctx.PostForm("captchaCode"),
+			CaptchaProtocol: getFormIntDefault(ctx, "captchaProtocol", 0),
 		}
 	}
 
@@ -113,30 +112,30 @@ func GetCreateTopicForm(ctx iris.Context) CreateTopicForm {
 		form.ContentType = constants.ContentTypeText
 	}
 
-	form.Ip = web.GetRequestIP(ctx.Request())
-	form.UserAgent = web.GetUserAgent(ctx.Request())
-	return *form
+	form.Ip = ctx.ClientIP()
+	form.UserAgent = ctx.GetHeader("User-Agent")
+	return form
 }
 
-func GetCreateCommentForm(ctx iris.Context) CreateCommentForm {
+func GetCreateCommentForm(ctx *gin.Context) CreateCommentForm {
 	form := CreateCommentForm{
-		EntityType: params.FormValue(ctx, "entityType"),
+		EntityType: ctx.PostForm("entityType"),
 		EntityId:   common.GetID(ctx, "entityId"),
-		Content:    strings.TrimSpace(params.FormValue(ctx, "content")),
+		Content:    strings.TrimSpace(ctx.PostForm("content")),
 		ImageList:  GetImageList(ctx, "imageList"),
-		QuoteId:    params.FormValueInt64Default(ctx, "quoteId", 0),
-		UserAgent:  web.GetUserAgent(ctx.Request()),
-		Ip:         web.GetRequestIP(ctx.Request()),
+		QuoteId:    getFormInt64Default(ctx, "quoteId", 0),
+		UserAgent:  ctx.GetHeader("User-Agent"),
+		Ip:         ctx.ClientIP(),
 	}
 	return form
 }
 
-func GetCreateArticleForm(ctx iris.Context) CreateArticleForm {
+func GetCreateArticleForm(ctx *gin.Context) CreateArticleForm {
 	var (
-		title   = ctx.PostValue("title")
-		summary = ctx.PostValue("summary")
-		content = ctx.PostValue("content")
-		tags    = params.FormValueStringArray(ctx, "tags")
+		title   = ctx.PostForm("title")
+		summary = ctx.PostForm("summary")
+		content = ctx.PostForm("content")
+		tags    = ctx.PostFormArray("tags")
 		cover   = GetImageDTO(ctx, "cover")
 	)
 	return CreateArticleForm{
@@ -149,8 +148,8 @@ func GetCreateArticleForm(ctx iris.Context) CreateArticleForm {
 	}
 }
 
-func GetImageList(ctx iris.Context, paramName string) []ImageDTO {
-	imageListStr := params.FormValue(ctx, paramName)
+func GetImageList(ctx *gin.Context, paramName string) []ImageDTO {
+	imageListStr := ctx.PostForm(paramName)
 	var imageList []ImageDTO
 	if strs.IsNotBlank(imageListStr) {
 		ret := gjson.Parse(imageListStr)
@@ -166,8 +165,8 @@ func GetImageList(ctx iris.Context, paramName string) []ImageDTO {
 	return imageList
 }
 
-func GetImageDTO(ctx iris.Context, paramName string) (img *ImageDTO) {
-	str := params.FormValue(ctx, paramName)
+func GetImageDTO(ctx *gin.Context, paramName string) (img *ImageDTO) {
+	str := ctx.PostForm(paramName)
 	if strs.IsBlank(str) {
 		return
 	}
@@ -175,4 +174,36 @@ func GetImageDTO(ctx iris.Context, paramName string) (img *ImageDTO) {
 		slog.Error(err.Error(), slog.Any("err", err))
 	}
 	return
+}
+
+func getFormIntDefault(ctx *gin.Context, key string, defaultValue int) int {
+	val := ctx.PostForm(key)
+	if val == "" {
+		return defaultValue
+	}
+	var result int
+	for _, c := range val {
+		if c >= '0' && c <= '9' {
+			result = result*10 + int(c-'0')
+		} else {
+			return defaultValue
+		}
+	}
+	return result
+}
+
+func getFormInt64Default(ctx *gin.Context, key string, defaultValue int64) int64 {
+	val := ctx.PostForm(key)
+	if val == "" {
+		return defaultValue
+	}
+	var result int64
+	for _, c := range val {
+		if c >= '0' && c <= '9' {
+			result = result*10 + int64(c-'0')
+		} else {
+			return defaultValue
+		}
+	}
+	return result
 }

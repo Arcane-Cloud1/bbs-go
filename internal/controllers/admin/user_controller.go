@@ -11,7 +11,7 @@ import (
 
 	"bbs-go/internal/models"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/sqls"
 	"github.com/mlogclub/simple/web"
 	"github.com/mlogclub/simple/web/params"
@@ -20,11 +20,7 @@ import (
 	"bbs-go/internal/services"
 )
 
-type UserController struct {
-	Ctx iris.Context
-}
-
-func (c *UserController) GetSynccount() *web.JsonResult {
+func UserSynccount(ctx *gin.Context) {
 	go func() {
 		services.UserService.Scan(func(users []models.User) {
 			for _, user := range users {
@@ -36,19 +32,21 @@ func (c *UserController) GetSynccount() *web.JsonResult {
 			}
 		})
 	}()
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-func (c *UserController) GetBy(id int64) *web.JsonResult {
+func UserGet(ctx *gin.Context) {
+	id, _ := strconv.ParseInt(ctx.Param("id"), 10, 64)
 	t := services.UserService.Get(id)
 	if t == nil {
-		return web.JsonErrorMsg("Not found, id=" + strconv.FormatInt(id, 10))
+		ctx.JSON(200, web.JsonErrorMsg("Not found, id="+strconv.FormatInt(id, 10)))
+		return
 	}
-	return web.JsonData(c.buildUserItem(t, true))
+	ctx.JSON(200, web.JsonData(buildUserItem(t, true)))
 }
 
-func (c *UserController) AnyList() *web.JsonResult {
-	list, paging := services.UserService.FindPageByCnd(params.NewPagedSqlCnd(c.Ctx,
+func UserList(ctx *gin.Context) {
+	list, paging := services.UserService.FindPageByCnd(params.NewPagedSqlCndGin(ctx,
 		params.QueryFilter{
 			ParamName: "id",
 			Op:        params.Eq,
@@ -78,42 +76,42 @@ func (c *UserController) AnyList() *web.JsonResult {
 	).Desc("id"))
 	var itemList []map[string]interface{}
 	for _, user := range list {
-		itemList = append(itemList, c.buildUserItem(&user, false))
+		itemList = append(itemList, buildUserItem(&user, false))
 	}
-	return web.JsonData(&web.PageResult{Results: itemList, Page: paging})
+	ctx.JSON(200, web.JsonData(&web.PageResult{Results: itemList, Page: paging}))
 }
 
-func (c *UserController) PostCreate() *web.JsonResult {
-	username := params.FormValue(c.Ctx, "username")
-	email := params.FormValue(c.Ctx, "email")
-	nickname := params.FormValue(c.Ctx, "nickname")
-	password := params.FormValue(c.Ctx, "password")
+func UserCreate(ctx *gin.Context) {
+	username := ctx.PostForm("username")
+	email := ctx.PostForm("email")
+	nickname := ctx.PostForm("nickname")
+	password := ctx.PostForm("password")
 
 	user, err := services.UserService.SignUp(username, email, nickname, password, password)
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonData(c.buildUserItem(user, true))
+	ctx.JSON(200, web.JsonData(buildUserItem(user, true)))
 }
 
-func (c *UserController) PostUpdate() *web.JsonResult {
-	var (
-		id, _       = params.GetInt64(c.Ctx, "id")
-		_type, _    = params.GetInt(c.Ctx, "type")
-		username    = params.FormValue(c.Ctx, "username")
-		email       = params.FormValue(c.Ctx, "email")
-		nickname    = params.FormValue(c.Ctx, "nickname")
-		avatar      = params.FormValue(c.Ctx, "avatar")
-		gender      = params.FormValue(c.Ctx, "gender")
-		homePage    = params.FormValue(c.Ctx, "homePage")
-		description = params.FormValue(c.Ctx, "description")
-		roleIds     = params.FormValueInt64Array(c.Ctx, "roleIds")
-		status      = params.FormValueIntDefault(c.Ctx, "status", 0)
-	)
+func UserUpdate(ctx *gin.Context) {
+	id, _ := strconv.ParseInt(ctx.PostForm("id"), 10, 64)
+	_type, _ := strconv.Atoi(ctx.PostForm("type"))
+	username := ctx.PostForm("username")
+	email := ctx.PostForm("email")
+	nickname := ctx.PostForm("nickname")
+	avatar := ctx.PostForm("avatar")
+	gender := ctx.PostForm("gender")
+	homePage := ctx.PostForm("homePage")
+	description := ctx.PostForm("description")
+	roleIds := params.FormValueInt64Array(ctx, "roleIds")
+	status, _ := strconv.Atoi(ctx.PostForm("status"))
 
 	user := services.UserService.Get(id)
 	if user == nil {
-		return web.JsonErrorMsg("entity not found")
+		ctx.JSON(200, web.JsonErrorMsg("entity not found"))
+		return
 	}
 
 	user.Type = _type
@@ -127,78 +125,85 @@ func (c *UserController) PostUpdate() *web.JsonResult {
 	user.Status = status
 
 	if err := services.UserService.Update(user); err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
 	if err := services.UserRoleService.UpdateUserRoles(user.Id, roleIds); err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
 	user = services.UserService.Get(user.Id)
-	return web.JsonData(c.buildUserItem(user, true))
+	ctx.JSON(200, web.JsonData(buildUserItem(user, true)))
 }
 
-// 禁言
-func (c *UserController) PostForbidden() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
+func UserForbidden(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
 	if !user.HasAnyRole(constants.RoleOwner, constants.RoleAdmin) {
-		return web.JsonErrorMsg("无权限")
+		ctx.JSON(200, web.JsonErrorMsg("无权限"))
+		return
 	}
-	var (
-		userId = params.FormValueInt64Default(c.Ctx, "userId", 0)
-		days   = params.FormValueIntDefault(c.Ctx, "days", 0)
-		reason = params.FormValue(c.Ctx, "reason")
-	)
+
+	userId := params.FormValueInt64Default(ctx, "userId", 0)
+	days := params.FormValueIntDefault(ctx, "days", 0)
+	reason := ctx.PostForm("reason")
+
 	if userId < 0 {
-		return web.JsonErrorMsg("请传入：userId")
+		ctx.JSON(200, web.JsonErrorMsg("请传入：userId"))
+		return
 	}
+
 	if days == 0 {
-		services.UserService.RemoveForbidden(user.Id, userId, c.Ctx.Request())
+		services.UserService.RemoveForbidden(user.Id, userId, ctx.Request)
 	} else {
-		if err := services.UserService.Forbidden(user.Id, userId, days, reason, c.Ctx.Request()); err != nil {
-			return web.JsonError(err)
+		if err := services.UserService.Forbidden(user.Id, userId, days, reason, ctx.Request); err != nil {
+			ctx.JSON(200, web.JsonError(err))
+			return
 		}
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 修改自己的密码
-func (c *UserController) PostUpdate_password() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
+func UserUpdatePassword(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	var (
-		oldPassword = params.FormValue(c.Ctx, "oldPassword")
-		password    = params.FormValue(c.Ctx, "password")
-		rePassword  = params.FormValue(c.Ctx, "rePassword")
-	)
+
+	oldPassword := ctx.PostForm("oldPassword")
+	password := ctx.PostForm("password")
+	rePassword := ctx.PostForm("rePassword")
+
 	if err := services.UserService.UpdatePassword(user.Id, oldPassword, password, rePassword); err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// PostResetPassword 重置密码
-func (c *UserController) PostReset_password() *web.JsonResult {
-	userId, _ := params.GetInt64(c.Ctx, "userId")
-
+func UserResetPassword(ctx *gin.Context) {
+	userId, _ := strconv.ParseInt(ctx.PostForm("userId"), 10, 64)
 	if userId <= 0 {
-		return web.JsonErrorMsg("invalid param: userId")
+		ctx.JSON(200, web.JsonErrorMsg("invalid param: userId"))
+		return
 	}
 
 	newPassword, err := services.UserService.ResetPassword(userId)
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
 
-	return web.JsonData(iris.Map{
+	ctx.JSON(200, web.JsonData(gin.H{
 		"password": newPassword,
-	})
+	}))
 }
 
-func (c *UserController) buildUserItem(user *models.User, buildRoleIds bool) map[string]interface{} {
+func buildUserItem(user *models.User, buildRoleIds bool) map[string]interface{} {
 	b := web.NewRspBuilder(user).
 		Put("idEncode", idcodec.Encode(user.Id)).
 		Put("roles", user.GetRoles()).

@@ -6,13 +6,13 @@ import (
 	"bbs-go/internal/pkg/errs"
 	"bbs-go/internal/pkg/urls"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/web"
 )
 
 type pathRole struct {
-	Pattern string   // path pattern
-	Roles   []string // roles
+	Pattern string
+	Roles   []string
 }
 
 var (
@@ -29,12 +29,11 @@ var (
 	antPathMatcher = urls.NewAntPathMatcher()
 )
 
-// AdminMiddleware 后台权限
-func AdminMiddleware(ctx iris.Context) {
+func AdminMiddleware(ctx *gin.Context) {
 	roles := getPathRoles(ctx)
 
-	// 不需要任何角色既能访问
 	if len(roles) == 0 {
+		ctx.Next()
 		return
 	}
 
@@ -51,9 +50,8 @@ func AdminMiddleware(ctx iris.Context) {
 	ctx.Next()
 }
 
-// getPathRoles 获取请求该路径所需的角色
-func getPathRoles(ctx iris.Context) []string {
-	p := ctx.Path()
+func getPathRoles(ctx *gin.Context) []string {
+	p := ctx.Request.URL.Path
 	for _, pathRole := range authCfg {
 		if antPathMatcher.Match(pathRole.Pattern, p) {
 			return pathRole.Roles
@@ -62,14 +60,12 @@ func getPathRoles(ctx iris.Context) []string {
 	return nil
 }
 
-// notLogin 未登录返回
-func notLogin(ctx iris.Context) {
-	_ = ctx.JSON(web.JsonError(errs.NotLogin()))
-	ctx.StopExecution()
+func notLogin(ctx *gin.Context) {
+	ctx.JSON(200, web.JsonError(errs.NotLogin()))
+	ctx.Abort()
 }
 
-// noPermission 无权限返回
-func noPermission(ctx iris.Context) {
-	_ = ctx.JSON(web.JsonError(errs.NoPermission()))
-	ctx.StopExecution()
+func noPermission(ctx *gin.Context) {
+	ctx.JSON(200, web.JsonError(errs.NoPermission()))
+	ctx.Abort()
 }

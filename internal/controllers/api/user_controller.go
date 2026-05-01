@@ -2,19 +2,16 @@ package api
 
 import (
 	"bbs-go/internal/models/constants"
-	"bbs-go/internal/models/resp"
 	"bbs-go/internal/pkg/common"
 	"bbs-go/internal/pkg/config"
 	"bbs-go/internal/pkg/errs"
 	"bbs-go/internal/pkg/idcodec"
 	"bbs-go/internal/pkg/locales"
-	"bbs-go/internal/pkg/msg"
-	"bbs-go/internal/pkg/validate"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/strs"
 	"github.com/mlogclub/simple/sqls"
 	"github.com/mlogclub/simple/web"
@@ -27,48 +24,48 @@ import (
 	"bbs-go/internal/services"
 )
 
-type UserController struct {
-	Ctx iris.Context
-}
-
-// 获取当前登录用户
-func (c *UserController) GetCurrent() *web.JsonResult {
+func UserCurrent(ctx *gin.Context) {
 	if !config.Instance.Installed {
-		return web.JsonSuccess()
+		ctx.JSON(200, web.JsonSuccess())
+		return
 	}
-	user := common.GetCurrentUser(c.Ctx)
+	user := common.GetCurrentUser(ctx)
 	if user != nil {
-		return web.JsonData(render.BuildUserProfile(user))
+		ctx.JSON(200, web.JsonData(render.BuildUserProfile(user)))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 用户详情
-func (c *UserController) GetBy(userIdStr string) *web.JsonResult {
+func UserDetail(ctx *gin.Context) {
+	userIdStr := ctx.Param("id")
 	userId := idcodec.Decode(userIdStr)
 	user := cache.UserCache.Get(userId)
 	if user != nil && user.Status != constants.StatusDeleted {
-		return web.JsonData(render.BuildUserDetail(user))
+		ctx.JSON(200, web.JsonData(render.BuildUserDetail(user)))
+		return
 	}
-	return web.JsonErrorMsg(locales.Get("user.not_found"))
+	ctx.JSON(200, web.JsonErrorMsg(locales.Get("user.not_found")))
 }
 
-// 修改用户资料
-func (c *UserController) PostUpdateBy(userIdStr string) *web.JsonResult {
+func UserUpdate(ctx *gin.Context) {
+	userIdStr := ctx.Param("id")
 	userId := idcodec.Decode(userIdStr)
-	user := common.GetCurrentUser(c.Ctx)
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
 	if user.Id != userId {
-		return web.JsonErrorMsg(locales.Get("user.no_permission"))
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("user.no_permission")))
+		return
 	}
+
 	var (
-		nickname    = strings.TrimSpace(params.FormValue(c.Ctx, "nickname"))
-		homePage    = params.FormValue(c.Ctx, "homePage")
-		description = params.FormValue(c.Ctx, "description")
-		gender      = strings.TrimSpace(params.FormValue(c.Ctx, "gender"))
-		err         error
+		nickname    = strings.TrimSpace(ctx.PostForm("nickname"))
+		homePage    = ctx.PostForm("homePage")
+		description = ctx.PostForm("description")
+		gender      = strings.TrimSpace(ctx.PostForm("gender"))
 	)
 
 	var (
@@ -80,135 +77,100 @@ func (c *UserController) PostUpdateBy(userIdStr string) *web.JsonResult {
 		maxLength = constants.NicknameMaxLengthZhCN
 	}
 	if nicknameLength := utf8.RuneCountInString(nickname); nicknameLength < minLength || nicknameLength > maxLength {
-		return web.JsonErrorMsg(locales.Getf("user.nickname_length_invalid", minLength, maxLength))
+		ctx.JSON(200, web.JsonErrorMsg(locales.Getf("user.nickname_length_invalid", minLength, maxLength)))
+		return
 	}
 
 	if strs.IsNotBlank(gender) {
 		if gender != string(constants.GenderMale) && gender != string(constants.GenderFemale) {
-			return web.JsonErrorMsg(locales.Get("user.gender_error"))
+			ctx.JSON(200, web.JsonErrorMsg(locales.Get("user.gender_error")))
+			return
 		}
 	}
 
-	if len(homePage) > 0 && validate.IsURL(homePage) != nil {
-		return web.JsonErrorMsg(locales.Get("user.homepage_error"))
-	}
-
-	err = services.UserService.Updates(user.Id, map[string]any{
+	err := services.UserService.Updates(user.Id, map[string]any{
 		"nickname":    nickname,
 		"home_page":   homePage,
 		"description": description,
 		"gender":      gender,
 	})
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 修改头像
-func (c *UserController) PostUpdate_avatar() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
+func UserUpdateAvatar(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	avatar := strings.TrimSpace(params.FormValue(c.Ctx, "avatar"))
+	avatar := strings.TrimSpace(ctx.PostForm("avatar"))
 	if len(avatar) == 0 {
-		return web.JsonErrorMsg(locales.Get("user.avatar_empty"))
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("user.avatar_empty")))
+		return
 	}
 	err := services.UserService.UpdateAvatar(user.Id, avatar)
 	if err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 设置用户名
-func (c *UserController) PostSet_username() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
+func UserUpdateBackgroundImage(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	username := strings.TrimSpace(params.FormValue(c.Ctx, "username"))
-	err := services.UserService.SetUsername(user.Id, username)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
-}
-
-// 设置邮箱
-func (c *UserController) PostSet_email() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	if user == nil {
-		return web.JsonError(errs.NotLogin())
-	}
-	email := strings.TrimSpace(params.FormValue(c.Ctx, "email"))
-	err := services.UserService.SetEmail(user.Id, email)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
-}
-
-// 设置密码
-func (c *UserController) PostSet_password() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	if user == nil {
-		return web.JsonError(errs.NotLogin())
-	}
-	password := params.FormValue(c.Ctx, "password")
-	rePassword := params.FormValue(c.Ctx, "rePassword")
-	err := services.UserService.SetPassword(user.Id, password, rePassword)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
-}
-
-// 修改密码
-func (c *UserController) PostUpdate_password() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	if user == nil {
-		return web.JsonError(errs.NotLogin())
-	}
-	var (
-		oldPassword = params.FormValue(c.Ctx, "oldPassword")
-		password    = params.FormValue(c.Ctx, "password")
-		rePassword  = params.FormValue(c.Ctx, "rePassword")
-	)
-	if err := services.UserService.UpdatePassword(user.Id, oldPassword, password, rePassword); err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
-}
-
-// 设置背景图
-func (c *UserController) PostSet_background_image() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	if user == nil {
-		return web.JsonError(errs.NotLogin())
-	}
-	backgroundImage := params.FormValue(c.Ctx, "backgroundImage")
+	backgroundImage := ctx.PostForm("backgroundImage")
 	if strs.IsBlank(backgroundImage) {
-		return web.JsonErrorMsg(locales.Get("user.upload_image_required"))
+		ctx.JSON(200, web.JsonErrorMsg(locales.Get("user.upload_image_required")))
+		return
 	}
 	if err := services.UserService.UpdateBackgroundImage(user.Id, backgroundImage); err != nil {
-		return web.JsonError(err)
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonSuccess()
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 用户收藏
-func (c *UserController) GetFavorites() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	cursor := params.FormValueInt64Default(c.Ctx, "cursor", 0)
+func UserTopics(ctx *gin.Context) {
+	userId := common.GetQueryID(ctx, "userId")
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
 
-	// 用户必须登录
+	topics, cursor, hasMore := services.TopicService.GetUserTopics(userId, cursor)
+	ctx.JSON(200, web.JsonCursorData(render.BuildSimpleTopicsGin(ctx, topics), strconv.FormatInt(cursor, 10), hasMore))
+}
+
+func UserArticles(ctx *gin.Context) {
+	userId := common.GetQueryID(ctx, "userId")
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+
+	articles, cursor, hasMore := services.ArticleService.GetUserArticles(userId, cursor)
+	ctx.JSON(200, web.JsonCursorData(render.BuildSimpleArticles(articles), strconv.FormatInt(cursor, 10), hasMore))
+}
+
+func UserComments(ctx *gin.Context) {
+	userId := common.GetQueryID(ctx, "userId")
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+
+	comments, cursor, hasMore := services.CommentService.GetUserComments(userId, cursor)
+	ctx.JSON(200, web.JsonCursorData(render.BuildComments(comments), strconv.FormatInt(cursor, 10), hasMore))
+}
+
+func UserFavorites(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
 
-	// 查询列表
 	limit := 20
 	var favorites []models.Favorite
 	if cursor > 0 {
@@ -224,32 +186,66 @@ func (c *UserController) GetFavorites() *web.JsonResult {
 		hasMore = len(favorites) >= limit
 	}
 
-	return web.JsonCursorData(render.BuildFavorites(favorites), strconv.FormatInt(cursor, 10), hasMore)
+	ctx.JSON(200, web.JsonCursorData(render.BuildFavorites(favorites), strconv.FormatInt(cursor, 10), hasMore))
 }
 
-// 获取最近3条未读消息
-func (c *UserController) GetMsg_recent() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	var count int64 = 0
-	var messages []models.Message
-	if user != nil {
-		count = services.MessageService.GetUnReadCount(user.Id)
-		messages = services.MessageService.Find(sqls.NewCnd().Eq("user_id", user.Id).
-			Eq("status", msg.StatusUnread).Limit(3).Desc("id"))
+func UserFans(ctx *gin.Context) {
+	userId := common.GetQueryID(ctx, "userId")
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+
+	fans, cursor, hasMore := services.UserFollowService.GetFans(userId, cursor)
+	ctx.JSON(200, web.JsonCursorData(render.BuildUsers(fans), strconv.FormatInt(cursor, 10), hasMore))
+}
+
+func UserFollows(ctx *gin.Context) {
+	userId := common.GetQueryID(ctx, "userId")
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+
+	follows, cursor, hasMore := services.UserFollowService.GetFollows(userId, cursor)
+	ctx.JSON(200, web.JsonCursorData(render.BuildUsers(follows), strconv.FormatInt(cursor, 10), hasMore))
+}
+
+func UserFollow(ctx *gin.Context) {
+	userIdStr := ctx.Param("id")
+	userId := idcodec.Decode(userIdStr)
+	user := common.GetCurrentUser(ctx)
+	if user == nil {
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	return web.NewEmptyRspBuilder().Put("count", count).Put("messages", render.BuildMessages(messages)).JsonResult()
+
+	if err := services.UserFollowService.Follow(user.Id, userId); err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
+	}
+	ctx.JSON(200, web.JsonSuccess())
 }
 
-// 用户消息
-func (c *UserController) GetMessages() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
+func UserUnfollow(ctx *gin.Context) {
+	userIdStr := ctx.Param("id")
+	userId := idcodec.Decode(userIdStr)
+	user := common.GetCurrentUser(ctx)
+	if user == nil {
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
+	}
+
+	if err := services.UserFollowService.Unfollow(user.Id, userId); err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
+	}
+	ctx.JSON(200, web.JsonSuccess())
+}
+
+func UserMessages(ctx *gin.Context) {
+	user, err := common.CheckLogin(ctx)
 	if err != nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	var (
-		limit     = 20
-		cursor, _ = params.GetInt64(c.Ctx, "cursor")
-	)
+
+	limit := 20
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
 
 	cnd := sqls.NewCnd().Eq("user_id", user.Id).Limit(limit).Desc("id")
 	if cursor > 0 {
@@ -266,22 +262,45 @@ func (c *UserController) GetMessages() *web.JsonResult {
 		hasMore = len(list) == limit
 	}
 
-	// 全部标记为已读
 	services.MessageService.MarkRead(user.Id)
 
-	return web.JsonCursorData(render.BuildMessages(list), cast.ToString(nextCursor), hasMore)
+	ctx.JSON(200, web.JsonCursorData(render.BuildMessages(list), cast.ToString(nextCursor), hasMore))
 }
 
-// 用户积分记录
-func (c *UserController) GetScore_logs() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
+func UserReadMsg(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
+	if user == nil {
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	var (
-		limit     = 20
-		cursor, _ = params.GetInt64(c.Ctx, "cursor")
-	)
+
+	msgId := params.FormValueInt64Default(ctx, "id", 0)
+	if msgId > 0 {
+		services.MessageService.MarkReadById(user.Id, msgId)
+	}
+	ctx.JSON(200, web.JsonSuccess())
+}
+
+func UserReadAllMsg(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
+	if user == nil {
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
+	}
+
+	services.MessageService.MarkRead(user.Id)
+	ctx.JSON(200, web.JsonSuccess())
+}
+
+func UserScoreLogs(ctx *gin.Context) {
+	user, err := common.CheckLogin(ctx)
+	if err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
+	}
+
+	limit := 20
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
 	cnd := sqls.NewCnd().Eq("user_id", user.Id).Limit(limit).Desc("id")
 	if cursor > 0 {
 		cnd.Lt("id", cursor)
@@ -297,127 +316,72 @@ func (c *UserController) GetScore_logs() *web.JsonResult {
 		hasMore = len(list) == limit
 	}
 
-	return web.JsonCursorData(list, cast.ToString(nextCursor), hasMore)
+	ctx.JSON(200, web.JsonCursorData(list, cast.ToString(nextCursor), hasMore))
 }
 
-// 积分排行
-func (c *UserController) GetScoreRank() *web.JsonResult {
-	users := cache.UserCache.GetScoreRank()
-	var results []*resp.UserInfo
-	for _, user := range users {
-		results = append(results, render.BuildUserInfo(&user))
+func UserExpLogs(ctx *gin.Context) {
+	user, err := common.CheckLogin(ctx)
+	if err != nil {
+		ctx.JSON(200, web.JsonError(err))
+		return
 	}
-	return web.JsonData(results)
-}
 
-// 禁言
-func (c *UserController) PostForbidden() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
-	if user == nil {
-		return web.JsonError(errs.NotLogin())
+	limit := 20
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+	cnd := sqls.NewCnd().Eq("user_id", user.Id).Limit(limit).Desc("id")
+	if cursor > 0 {
+		cnd.Lt("id", cursor)
 	}
-	if !user.HasAnyRole(constants.RoleOwner, constants.RoleAdmin) {
-		return web.JsonErrorMsg(locales.Get("user.no_permission"))
-	}
+	list := services.UserExpLogService.Find(cnd)
+
 	var (
-		userId = common.GetID(c.Ctx, "userId")
-		days   = params.FormValueIntDefault(c.Ctx, "days", 0)
-		reason = params.FormValue(c.Ctx, "reason")
+		nextCursor = cursor
+		hasMore    = false
 	)
-	if userId < 0 {
-		return web.JsonErrorMsg("param: userId required")
+	if len(list) > 0 {
+		nextCursor = list[len(list)-1].Id
+		hasMore = len(list) == limit
 	}
-	if days == -1 && !user.HasRole(constants.RoleOwner) {
-		return web.JsonErrorMsg(locales.Get("user.no_permission"))
-	}
-	if days == 0 {
-		services.UserService.RemoveForbidden(user.Id, userId, c.Ctx.Request())
-	} else {
-		if err := services.UserService.Forbidden(user.Id, userId, days, reason, c.Ctx.Request()); err != nil {
-			return web.JsonError(err)
-		}
-	}
-	return web.JsonSuccess()
+
+	ctx.JSON(200, web.JsonCursorData(list, cast.ToString(nextCursor), hasMore))
 }
 
-// PostEmailVerify 请求邮箱验证邮件
-func (c *UserController) PostSend_verify_email() *web.JsonResult {
-	user := common.GetCurrentUser(c.Ctx)
+func UserCheckinStatus(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
 	if user == nil {
-		return web.JsonError(errs.NotLogin())
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
-	if err := services.UserService.SendEmailVerifyEmail(user.Id); err != nil {
-		return web.JsonError(err)
-	}
-	return web.JsonSuccess()
+
+	checkIn := services.CheckInService.GetToday(user.Id)
+	ctx.JSON(200, web.JsonData(map[string]interface{}{
+		"checked": checkIn != nil,
+	}))
 }
 
-// PostVerify_email 获取邮箱验证码
-func (c *UserController) PostVerify_email() *web.JsonResult {
-	token := params.FormValue(c.Ctx, "token")
-	if strs.IsBlank(token) {
-		return web.JsonErrorMsg("Illegal request")
+func UserCheckinLogs(ctx *gin.Context) {
+	user := common.GetCurrentUser(ctx)
+	if user == nil {
+		ctx.JSON(200, web.JsonError(errs.NotLogin()))
+		return
 	}
+
+	limit := 20
+	cursor := params.FormValueInt64Default(ctx, "cursor", 0)
+	cnd := sqls.NewCnd().Eq("user_id", user.Id).Limit(limit).Desc("id")
+	if cursor > 0 {
+		cnd.Lt("id", cursor)
+	}
+	list := services.CheckInService.Find(cnd)
+
 	var (
-		email string
-		err   error
+		nextCursor = cursor
+		hasMore    = false
 	)
-	if email, err = services.UserService.VerifyEmail(token); err != nil {
-		return web.JsonError(err)
+	if len(list) > 0 {
+		nextCursor = list[len(list)-1].Id
+		hasMore = len(list) == limit
 	}
-	return web.NewEmptyRspBuilder().Put("email", email).JsonResult()
-}
 
-func (c *UserController) GetWx_bind_info() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	thirdUser := services.ThirdUserService.GetByUserId(user.Id, constants.ThirdTypeWeixin)
-	if thirdUser != nil {
-		return web.JsonData(map[string]any{
-			"bind":     true,
-			"nickname": thirdUser.Nickname,
-			"avatar":   thirdUser.Avatar,
-		})
-	}
-	return web.JsonData(map[string]any{
-		"bind": false,
-	})
-}
-
-func (c *UserController) GetGoogle_bind_info() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	thirdUser := services.ThirdUserService.GetByUserId(user.Id, constants.ThirdTypeGoogle)
-	if thirdUser != nil {
-		return web.JsonData(map[string]any{
-			"bind":     true,
-			"nickname": thirdUser.Nickname,
-			"avatar":   thirdUser.Avatar,
-		})
-	}
-	return web.JsonData(map[string]any{
-		"bind": false,
-	})
-}
-
-func (c *UserController) GetGithub_bind_info() *web.JsonResult {
-	user, err := common.CheckLogin(c.Ctx)
-	if err != nil {
-		return web.JsonError(err)
-	}
-	thirdUser := services.ThirdUserService.GetByUserId(user.Id, constants.ThirdTypeGithub)
-	if thirdUser != nil {
-		return web.JsonData(map[string]any{
-			"bind":     true,
-			"nickname": thirdUser.Nickname,
-			"avatar":   thirdUser.Avatar,
-		})
-	}
-	return web.JsonData(map[string]any{
-		"bind": false,
-	})
+	ctx.JSON(200, web.JsonCursorData(list, cast.ToString(nextCursor), hasMore))
 }

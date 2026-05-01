@@ -4,10 +4,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/kataras/iris/v12"
 	"github.com/mlogclub/simple/common/strs"
-	"github.com/mlogclub/simple/web/params"
 	"github.com/spf13/cast"
 )
 
@@ -37,7 +36,7 @@ func CreateToken(userId int64, nickname, avatar string) (string, error) {
 	return claims.SignedString([]byte(secret))
 }
 
-func GetUser(c iris.Context) (user *UserClaims) {
+func GetUser(c *gin.Context) (user *UserClaims) {
 	token := getToken(c)
 	if strs.IsNotBlank(token) {
 		user, _ = parseToken(token)
@@ -45,15 +44,15 @@ func GetUser(c iris.Context) (user *UserClaims) {
 	return
 }
 
-func getToken(c iris.Context) string {
-	token := c.Request().Header.Get(userTokenHeader)
+func getToken(c *gin.Context) string {
+	token := c.GetHeader(userTokenHeader)
 	if strs.IsNotBlank(token) {
 		if strings.HasPrefix(token, "Bearer ") {
 			return token[7:]
 		}
 		return token
 	}
-	token, _ = params.Get(c, userTokenParam)
+	token = c.Query(userTokenParam)
 	return token
 }
 

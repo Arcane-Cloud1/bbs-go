@@ -11,38 +11,26 @@ import (
 	"bbs-go/internal/pkg/event"
 	"bbs-go/internal/repositories"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/dates"
 	"github.com/mlogclub/simple/common/strs"
 	"github.com/mlogclub/simple/sqls"
-	"github.com/mlogclub/simple/web/params"
 )
 
-var UserTokenService = newUserTokenService()
-
-func newUserTokenService() *userTokenService {
-	return &userTokenService{}
-}
-
-type userTokenService struct {
-}
-
-func (s *userTokenService) GetCurrentUserId(ctx iris.Context) int64 {
-	user := s.GetCurrent(ctx)
+func (s *userTokenService) GetCurrentUserIdGin(ctx *gin.Context) int64 {
+	user := s.GetCurrentGin(ctx)
 	if user != nil {
 		return user.Id
 	}
 	return 0
 }
 
-func (s *userTokenService) GetCurrent(ctx iris.Context) *models.User {
-	token := s.GetUserToken(ctx)
+func (s *userTokenService) GetCurrentGin(ctx *gin.Context) *models.User {
+	token := s.GetUserTokenGin(ctx)
 	userToken := cache.UserTokenCache.Get(token)
-	// 没找到授权
 	if userToken == nil || userToken.Status == constants.StatusDeleted {
 		return nil
 	}
-	// 授权过期
 	if userToken.ExpiredAt <= dates.NowTimestamp() {
 		return nil
 	}
@@ -51,25 +39,21 @@ func (s *userTokenService) GetCurrent(ctx iris.Context) *models.User {
 		return nil
 	}
 
-	// 登录态访问：用于每日登录任务（带 token 打开网站即算今日登录，每用户每天仅发一次）
-	trySendUserLoginEvent(ctx, user.Id)
+	trySendUserLoginEventGin(ctx, user.Id)
 
 	return user
 }
 
-// trySendUserLoginEvent 在登录态访问时发送 user.login 事件，供每日登录任务使用。每用户每天仅发一次（由布隆过滤器 TryMarkAndReturnIfNew 原子保证）。
-func trySendUserLoginEvent(ctx iris.Context, userId int64) {
+func trySendUserLoginEventGin(ctx *gin.Context, userId int64) {
 	if ctx == nil || userId <= 0 {
 		return
 	}
-	// 确保本次请求只调用一次
 	ctxKeyDailyVisitSent := "daily_visit_sent"
-	if ctx.Values().Get(ctxKeyDailyVisitSent) != nil {
+	if _, exists := ctx.Get(ctxKeyDailyVisitSent); exists {
 		return
 	}
-	ctx.Values().Set(ctxKeyDailyVisitSent, true)
+	ctx.Set(ctxKeyDailyVisitSent, true)
 
-	// 如果今日已发送过，则不发送
 	if !cache.DailyVisitCache.TryMarkAndReturnIfNew(userId) {
 		return
 	}
@@ -80,16 +64,16 @@ func trySendUserLoginEvent(ctx iris.Context, userId int64) {
 	})
 }
 
-func (s *userTokenService) CheckLogin(ctx iris.Context) (*models.User, error) {
-	user := s.GetCurrent(ctx)
+func (s *userTokenService) CheckLoginGin(ctx *gin.Context) (*models.User, error) {
+	user := s.GetCurrentGin(ctx)
 	if user == nil {
 		return nil, errs.NotLogin()
 	}
 	return user, nil
 }
 
-func (s *userTokenService) Signout(ctx iris.Context) error {
-	token := s.GetUserToken(ctx)
+func (s *userTokenService) SignoutGin(ctx *gin.Context) error {
+	token := s.GetUserTokenGin(ctx)
 	userToken := repositories.UserTokenRepository.GetByToken(sqls.DB(), token)
 	if userToken == nil {
 		return nil
@@ -98,54 +82,24 @@ func (s *userTokenService) Signout(ctx iris.Context) error {
 	if err != nil {
 		return err
 	}
-	ctx.RemoveCookie(constants.CookieTokenKey)
+	ctx.SetCookie(constants.CookieTokenKey, "", -1, "/", "", false, true)
 	return nil
 }
 
-func (s *userTokenService) GetUserToken(ctx iris.Context) string {
-	if userToken, _ := params.Get(ctx, "userToken"); strs.IsNotBlank(userToken) {
+func (s *userTokenService) GetUserTokenGin(ctx *gin.Context) string {
+	if userToken := ctx.Query("userToken"); strs.IsNotBlank(userToken) {
 		return userToken
 	}
-	if userToken := ctx.GetCookie(constants.CookieTokenKey); strs.IsNotBlank(userToken) {
+	if userToken, err := ctx.Cookie(constants.CookieTokenKey); err == nil && strs.IsNotBlank(userToken) {
 		return userToken
 	}
-	return s.getUserTokenFromHeader(ctx)
+	return s.getUserTokenFromHeaderGin(ctx)
 }
 
-func (s *userTokenService) getUserTokenFromHeader(ctx iris.Context) string {
+func (s *userTokenService) getUserTokenFromHeaderGin(ctx *gin.Context) string {
 	if authorization := ctx.GetHeader("Authorization"); strs.IsNotBlank(authorization) {
 		userToken, _ := strings.CutPrefix(authorization, "Bearer ")
 		return userToken
 	}
 	return ctx.GetHeader("X-User-Token")
-}
-
-func (s *userTokenService) Generate(userId int64) (string, error) {
-	token := strs.UUID()
-	tokenExpireDays := SysConfigService.GetTokenExpireDays()
-	expiredAt := time.Now().Add(time.Hour * 24 * time.Duration(tokenExpireDays))
-	userToken := &models.UserToken{
-		Token:      token,
-		UserId:     userId,
-		ExpiredAt:  dates.Timestamp(expiredAt),
-		Status:     constants.StatusOk,
-		CreateTime: dates.NowTimestamp(),
-	}
-	err := repositories.UserTokenRepository.Create(sqls.DB(), userToken)
-	if err != nil {
-		return "", err
-	}
-	return token, nil
-}
-
-func (s *userTokenService) Disable(token string) error {
-	t := repositories.UserTokenRepository.GetByToken(sqls.DB(), token)
-	if t == nil {
-		return nil
-	}
-	err := repositories.UserTokenRepository.UpdateColumn(sqls.DB(), t.Id, "status", constants.StatusDeleted)
-	if err != nil {
-		cache.UserTokenCache.Invalidate(token)
-	}
-	return err
 }

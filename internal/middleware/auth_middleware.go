@@ -5,12 +5,12 @@ import (
 	"bbs-go/internal/pkg/config"
 	"bbs-go/internal/services"
 
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(ctx iris.Context) {
+func AuthMiddleware(ctx *gin.Context) {
 	if config.Instance.Installed {
-		if user := services.UserTokenService.GetCurrent(ctx); user != nil {
+		if user := services.UserTokenService.GetCurrentGin(ctx); user != nil {
 			common.SetCurrentUser(ctx, user)
 		}
 	}

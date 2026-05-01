@@ -1,6 +1,0 @@
-{
-  "name": "bbs-go",
-  "build": {
-    "engine": "go"
-  }
-}
