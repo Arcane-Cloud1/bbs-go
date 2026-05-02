@@ -2,7 +2,6 @@ package services
 
 import (
 	"strings"
-	"time"
 
 	"bbs-go/internal/cache"
 	"bbs-go/internal/models"
@@ -16,6 +15,14 @@ import (
 	"github.com/mlogclub/simple/common/strs"
 	"github.com/mlogclub/simple/sqls"
 )
+
+var UserTokenService = newUserTokenService()
+
+func newUserTokenService() *userTokenService {
+	return &userTokenService{}
+}
+
+type userTokenService struct{}
 
 func (s *userTokenService) GetCurrentUserIdGin(ctx *gin.Context) int64 {
 	user := s.GetCurrentGin(ctx)
