@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mlogclub/simple/common/jsons"
 	"github.com/mlogclub/simple/common/strs"
-	"github.com/mlogclub/simple/web"
 	"github.com/tidwall/gjson"
 )
 
